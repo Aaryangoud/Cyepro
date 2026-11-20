@@ -165,26 +165,41 @@ class RAGService:
             )
         return sources
 
-    def get_or_create_session(self, session_id: Optional[UUID], title: str) -> str:
+    def get_or_create_session(
+        self,
+        session_id: Optional[UUID],
+        title: str,
+        user_id: Optional[UUID] = None,
+    ) -> str:
         """
-        Retrieves existing chat session or creates a new one in the 'chat_sessions' table.
+        Retrieves existing chat session (verifying user ownership) or creates a new one strictly bound to user_id.
         """
         client = supabase_service.client
+        user_id_str = str(user_id) if user_id else None
+
         if session_id:
             sess_str = str(session_id)
             try:
-                res = client.table("chat_sessions").select("id").eq("id", sess_str).execute()
+                res = client.table("chat_sessions").select("id, user_id").eq("id", sess_str).execute()
                 if res.data and len(res.data) > 0:
+                    sess = res.data[0]
+                    # Verify ownership if user_id is provided
+                    if user_id_str and sess.get("user_id") and sess.get("user_id") != user_id_str:
+                        raise PermissionError(f"User {user_id_str} is not authorized to access session {sess_str}")
                     return sess_str
+            except PermissionError:
+                raise
             except Exception as exc:
                 logger.warning("Could not verify session %s, creating fallback: %s", sess_str, str(exc))
 
-        # Create new session
+        # Create new session strictly bound to authenticated user
         safe_title = (title[:75] + "...") if len(title) > 75 else title
         try:
             insert_payload: Dict[str, Any] = {"title": safe_title}
             if session_id:
                 insert_payload["id"] = str(session_id)
+            if user_id_str:
+                insert_payload["user_id"] = user_id_str
             res = client.table("chat_sessions").insert(insert_payload).execute()
             if res.data and len(res.data) > 0:
                 return str(res.data[0]["id"])
@@ -224,13 +239,14 @@ class RAGService:
         question: str,
         session_id: Optional[UUID] = None,
         vehicle_id: Optional[UUID] = None,
+        user_id: Optional[UUID] = None,
         top_k: int = 5,
         similarity_threshold: float = 0.4,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Executes complete RAG question answering pipeline:
-        1. Manages chat session and records user question.
+        1. Manages chat session bound to authenticated user_id.
         2. Retrieves relevant chunks via pgvector cosine similarity.
         3. Formulates prompt and generates grounded response via Gemini.
         4. Records assistant answer with cited sources.
@@ -240,7 +256,7 @@ class RAGService:
             raise ValueError("Question cannot be empty or whitespace.")
 
         # 1. Establish session ID and record user message
-        active_session_id = self.get_or_create_session(session_id=session_id, title=cleaned_question)
+        active_session_id = self.get_or_create_session(session_id=session_id, title=cleaned_question, user_id=user_id)
         self.record_chat_message(
             session_id=active_session_id,
             role="user",

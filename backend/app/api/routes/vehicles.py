@@ -1,11 +1,12 @@
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Depends, status
 
 from app.models.schemas import (
     VehicleCompareRequest,
     VehicleCompareResponse,
 )
+from app.core.auth import get_current_user, AuthenticatedUser
 from app.services.vehicle_comparison_service import vehicle_comparison_service
 from app.services.supabase_service import supabase_service
 
@@ -24,7 +25,10 @@ logger = logging.getLogger("automotive_ai.vehicles_api")
         "uploaded official brochures. Generates a neutral comparison summary and cites source pages."
     ),
 )
-async def compare_vehicles(request: VehicleCompareRequest) -> VehicleCompareResponse:
+async def compare_vehicles(
+    request: VehicleCompareRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> VehicleCompareResponse:
     """
     Side-by-side vehicle comparison endpoint with strict anti-hallucination and source citation.
     """
@@ -62,7 +66,9 @@ async def compare_vehicles(request: VehicleCompareRequest) -> VehicleCompareResp
     summary="List Registered Vehicles and Available Brochures",
     description="Returns available vehicles registered in the database and uploaded brochures ready for comparison.",
 )
-async def list_vehicles():
+async def list_vehicles(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
     """
     Helper endpoint returning all vehicles and ingested documents available for inquiries and comparisons.
     """

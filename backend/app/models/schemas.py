@@ -103,6 +103,8 @@ class DocumentDetailResponse(BaseModel):
     total_pages: Optional[int] = Field(default=None, description="Total pages extracted from the PDF")
     chunks_count: int = Field(default=0, description="Total number of chunks stored in pgvector")
     vehicle_id: Optional[str] = Field(default=None, description="Associated vehicle UUID if linked")
+    uploaded_by: Optional[str] = Field(default=None, description="UUID of user who uploaded the document")
+    is_owner: Optional[bool] = Field(default=False, description="Whether current authenticated user is the uploader")
     created_at: Optional[str] = Field(default=None, description="Ingestion timestamp")
     updated_at: Optional[str] = Field(default=None, description="Last status update timestamp")
 

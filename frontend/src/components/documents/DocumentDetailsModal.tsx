@@ -13,10 +13,14 @@ import {
   AlertCircle,
   Copy,
   Check,
+  Download,
+  Trash2,
+  User,
+  Shield,
 } from "lucide-react";
 import { DocumentItem, DocumentChunkItem } from "@/lib/types";
 import { StatusBadge } from "@/components/ui/Badge";
-import { processDocument, fetchDocumentChunks } from "@/lib/api";
+import { processDocument, fetchDocumentChunks, getDocumentDownloadUrl, deleteDocument } from "@/lib/api";
 
 interface DocumentDetailsModalProps {
   document: DocumentItem | null;
@@ -34,6 +38,8 @@ export function DocumentDetailsModal({
   const [chunks, setChunks] = useState<DocumentChunkItem[]>([]);
   const [loadingChunks, setLoadingChunks] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [actionMessage, setActionMessage] = useState<{
     type: "success" | "error" | null;
     text: string;
@@ -79,6 +85,43 @@ export function DocumentDetailsModal({
       });
     } finally {
       setIsReprocessing(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!document) return;
+    setIsDownloading(true);
+    try {
+      const res = await getDocumentDownloadUrl(document.id);
+      if (res.download_url) {
+        window.open(res.download_url, "_blank", "noopener,noreferrer");
+      }
+    } catch (err: any) {
+      setActionMessage({
+        type: "error",
+        text: err.message || "Failed to generate download URL.",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!document) return;
+    if (!confirm(`Are you sure you want to permanently delete '${document.file_name}'?`)) {
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await deleteDocument(document.id);
+      onReprocessSuccess();
+      onClose();
+    } catch (err: any) {
+      setActionMessage({
+        type: "error",
+        text: err.message || "Failed to delete document.",
+      });
+      setIsDeleting(false);
     }
   };
 
@@ -148,6 +191,23 @@ export function DocumentDetailsModal({
             </div>
 
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+              <span className="text-[11px] font-medium text-slate-500">Ownership</span>
+              <div className="mt-1.5">
+                {document.is_owner ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                    <User className="w-3.5 h-3.5" />
+                    Uploaded by you
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                    <Shield className="w-3.5 h-3.5 text-slate-400" />
+                    Shared Knowledge
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
               <span className="text-[11px] font-medium text-slate-500">Total Pages</span>
               <div className="text-sm font-semibold text-slate-800 mt-1">
                 {document.total_pages ?? "—"} pages
@@ -170,10 +230,17 @@ export function DocumentDetailsModal({
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 sm:col-span-2">
-              <span className="text-[11px] font-medium text-slate-500">Storage Path</span>
-              <div className="text-xs font-mono text-slate-700 truncate mt-1" title={document.storage_path}>
-                {document.storage_path}
+            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+              <span className="text-[11px] font-medium text-slate-500">PDF Access</span>
+              <div className="mt-1">
+                <button
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                >
+                  <Download className={`w-3.5 h-3.5 ${isDownloading ? "animate-spin" : ""}`} />
+                  View Original PDF
+                </button>
               </div>
             </div>
           </div>
@@ -248,8 +315,17 @@ export function DocumentDetailsModal({
 
         {/* Footer Actions */}
         <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-          <div className="text-[11px] text-slate-400">
-            Re-indexing safely purges and regenerates vectors
+          <div>
+            {document.is_owner && (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? "Deleting..." : "Delete Brochure"}</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

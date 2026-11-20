@@ -4,21 +4,25 @@ import React, { useEffect, useState } from "react";
 import {
   FileText,
   CheckCircle,
-  Clock,
   Car,
+  MessageSquare,
   RefreshCw,
   AlertCircle,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopNav } from "@/components/layout/TopNav";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentDocuments } from "@/components/dashboard/RecentDocuments";
-import { SystemStatus } from "@/components/dashboard/SystemStatus";
-import { fetchDashboardData } from "@/lib/api";
-import { DashboardStats, DocumentItem, SystemHealth } from "@/lib/types";
+import { RecentConversations } from "@/components/dashboard/RecentConversations";
+import { fetchDashboardData, fetchChatSessions } from "@/lib/api";
+import { DashboardStats, DocumentItem, SystemHealth, ChatSessionItem } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalDocuments: 0,
     completedDocuments: 0,
@@ -26,6 +30,7 @@ export default function DashboardPage() {
     availableVehicles: 0,
   });
   const [recentDocuments, setRecentDocuments] = useState<DocumentItem[]>([]);
+  const [recentSessions, setRecentSessions] = useState<ChatSessionItem[]>([]);
   const [health, setHealth] = useState<SystemHealth>({
     appStatus: "checking",
     dbStatus: "checking",
@@ -37,13 +42,18 @@ export default function DashboardPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchDashboardData();
-      setStats(data.stats);
-      setRecentDocuments(data.recentDocuments);
-      setHealth(data.health);
+      const [dashData, sessions] = await Promise.all([
+        fetchDashboardData(),
+        fetchChatSessions().catch(() => []),
+      ]);
+
+      setStats(dashData.stats);
+      setRecentDocuments(dashData.recentDocuments);
+      setHealth(dashData.health);
+      setRecentSessions(sessions);
     } catch (err: any) {
       console.error("Dashboard data load failed:", err);
-      setError("Unable to connect to Automotive AI backend. Check if the server is running on port 8000.");
+      setError("Unable to connect to the backend. Please verify the FastAPI service is running.");
     } finally {
       setIsLoading(false);
     }
@@ -53,108 +63,113 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
+  const firstName = user?.full_name ? user.full_name.split(" ")[0] : "Engineer";
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-slate-50/60 flex flex-col lg:flex-row">
       {/* Sidebar Navigation */}
       <Sidebar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+      {/* Main Workspace Area */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-w-0 transition-all">
         {/* Sticky Top Navigation */}
-        <TopNav health={health} />
+        <TopNav health={health} title="Dashboard" subtitle="Automotive AI Engineering Workspace" />
 
-        {/* Dashboard Workspace */}
-        <main className="flex-1 p-5 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
-          {/* Header Bar with Refresh */}
-          <div className="flex items-center justify-between pb-1">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                Automotive Intelligence Overview
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+          {/* Personalized Welcome Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
+            <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-blue-500/10 to-transparent pointer-events-none" />
+            
+            <div className="relative z-10 max-w-2xl space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-semibold">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                Enterprise Automotive Intelligence
+              </div>
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
+                Welcome back, {firstName} 👋
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Overview of vector stores, ingested technical brochures, and RAG pipelines
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Access official vehicle technical brochures, inquire with our RAG automotive assistant, and run brochure-grounded side-by-side vehicle comparisons.
               </p>
             </div>
 
-            <button
-              onClick={loadData}
-              disabled={isLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs disabled:opacity-50"
-              title="Refresh Dashboard"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isLoading ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
-            </button>
-          </div>
-
-          {/* Error Banner if connection fails */}
-          {error && (
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-xs text-amber-800">
-              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <span className="font-semibold">Backend Connection Notice: </span>
-                {error}
-              </div>
+            {/* Quick Refresh action */}
+            <div className="mt-5 pt-4 border-t border-slate-700/60 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 font-medium">
+                Shared Brochure Knowledge Base • Private Consultation Isolation
+              </span>
               <button
                 onClick={loadData}
-                className="underline font-semibold hover:text-amber-950 ml-2"
+                disabled={isLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-colors disabled:opacity-50"
+                title="Refresh dashboard data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Error Banner */}
+          {error && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-xs text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{error}</div>
+              <button
+                onClick={loadData}
+                className="underline font-bold text-amber-950 hover:opacity-80"
               >
                 Retry
               </button>
             </div>
           )}
 
-          {/* Section 1: Core Statistics Cards */}
+          {/* Section 1: Core Metrics Grid */}
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <StatCard
-              label="Total Uploaded Brochures"
+              label="Shared Brochures"
               value={isLoading ? "—" : stats.totalDocuments}
               icon={FileText}
-              subtext="Stored in automotive-brochures"
+              subtext="Stored in Supabase Storage"
               accentColor="blue"
             />
             <StatCard
-              label="Processed & Indexed"
+              label="Indexed in pgvector"
               value={isLoading ? "—" : stats.completedDocuments}
               icon={CheckCircle}
-              subtext="Embedded into pgvector 768D"
+              subtext="768-dim vector embeddings"
               accentColor="emerald"
-            />
-            <StatCard
-              label="Processing In-Queue"
-              value={isLoading ? "—" : stats.processingDocuments}
-              icon={Clock}
-              subtext="Pending PyMuPDF extraction"
-              accentColor="amber"
             />
             <StatCard
               label="Available Vehicles"
               value={isLoading ? "—" : stats.availableVehicles}
               icon={Car}
-              subtext="Registered in vehicle registry"
+              subtext="Ready for side-by-side comparison"
               accentColor="indigo"
+            />
+            <StatCard
+              label="Private Consultations"
+              value={isLoading ? "—" : recentSessions.length}
+              icon={MessageSquare}
+              subtext="Private to your account"
+              accentColor="amber"
             />
           </section>
 
-          {/* Section 2: Quick Actions */}
-          <section className="space-y-2">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Quick Actions
+          {/* Section 2: Prominent Quick Actions */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Quick Actions
+              </h3>
             </div>
             <QuickActions />
           </section>
 
-          {/* Section 3: Recent Ingested Documents */}
-          <section className="space-y-2">
-            <RecentDocuments
-              documents={recentDocuments}
-              isLoading={isLoading}
-            />
-          </section>
-
-          {/* Section 4: Infrastructure & AI Stack */}
-          <section className="space-y-2">
-            <SystemStatus health={health} />
+          {/* Section 3: Two-Column Activity & Content Section */}
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <RecentDocuments documents={recentDocuments} isLoading={isLoading} />
+            <RecentConversations sessions={recentSessions} isLoading={isLoading} />
           </section>
         </main>
       </div>

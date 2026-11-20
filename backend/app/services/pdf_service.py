@@ -191,6 +191,7 @@ class PDFService:
         total_pages: int,
         vehicle_id: Optional[UUID] = None,
         file_hash: Optional[str] = None,
+        uploaded_by: Optional[str] = None,
     ) -> Tuple[Optional[str], str, Optional[str]]:
         """
         Saves document record into the existing 'documents' Supabase PostgreSQL table.
@@ -209,6 +210,8 @@ class PDFService:
             doc_record["vehicle_id"] = str(vehicle_id)
         if file_hash:
             doc_record["file_hash"] = file_hash
+        if uploaded_by:
+            doc_record["uploaded_by"] = str(uploaded_by)
 
         client = supabase_service.client
         try:
@@ -217,9 +220,10 @@ class PDFService:
                 return str(res.data[0].get("id")), "completed", None
             return None, "completed", None
         except APIError as api_err:
-            # If insert failed because file_hash column does not exist yet (PGRST204 or 42703), retry without it
-            if "file_hash" in str(api_err.message) or "PGRST204" in str(api_err.code):
-                logger.info("Retrying document insert without 'file_hash' (migration pending).")
+            # If insert failed because uploaded_by or file_hash column does not exist yet in schema cache, retry safely
+            if "uploaded_by" in str(api_err.message) or "file_hash" in str(api_err.message) or "PGRST204" in str(api_err.code):
+                logger.info("Retrying document insert with fallback columns (schema cache updating).")
+                doc_record.pop("uploaded_by", None)
                 doc_record.pop("file_hash", None)
                 try:
                     res_retry = client.table("documents").insert(doc_record).execute()
@@ -234,6 +238,41 @@ class PDFService:
         except Exception as exc:
             logger.error("Failed to insert document metadata: %s", str(exc))
             return None, "completed", f"Notice: Could not insert metadata ({type(exc).__name__})"
+
+    def delete_from_storage(self, storage_path: str) -> bool:
+        """
+        Deletes a PDF file from the private Supabase Storage bucket.
+        """
+        if not storage_path:
+            return False
+        try:
+            client = supabase_service.client
+            client.storage.from_(STORAGE_BUCKET).remove([storage_path])
+            return True
+        except Exception as exc:
+            logger.error("Failed to delete storage object '%s': %s", storage_path, str(exc))
+            return False
+
+    def create_signed_url(self, storage_path: str, expires_in: int = 900) -> Optional[str]:
+        """
+        Generates a temporary signed URL for viewing/downloading a PDF from the private bucket.
+        Default expiration: 15 minutes (900 seconds).
+        """
+        if not storage_path:
+            return None
+        try:
+            client = supabase_service.client
+            res = client.storage.from_(STORAGE_BUCKET).create_signed_url(storage_path, expires_in)
+            if isinstance(res, dict) and res.get("signedURL"):
+                return res["signedURL"]
+            elif isinstance(res, dict) and res.get("signedUrl"):
+                return res["signedUrl"]
+            elif hasattr(res, "signed_url"):
+                return res.signed_url
+            return str(res) if res else None
+        except Exception as exc:
+            logger.error("Failed to generate signed URL for '%s': %s", storage_path, str(exc))
+            return None
 
 
 # Reusable singleton instance

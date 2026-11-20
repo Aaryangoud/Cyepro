@@ -137,7 +137,7 @@ export default function ComparisonPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-slate-50/60 flex flex-col lg:flex-row">
       {/* Sidebar Navigation */}
       <Sidebar />
 
@@ -151,7 +151,7 @@ export default function ComparisonPage() {
         />
 
         {/* Workspace Container */}
-        <main className="flex-1 p-5 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
           {/* Header Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1">
             <div>
@@ -261,6 +261,16 @@ export default function ComparisonPage() {
                 vehicle2={comparisonResult.vehicle_2}
                 rows={comparisonResult.comparison_table}
               />
+
+              {/* Executive Trade-Off & Neutral AI Summary */}
+              {comparisonResult.summary && (
+                <ComparisonSummary
+                  summary={comparisonResult.summary}
+                  vehicle1Name={comparisonResult.vehicle_1.name}
+                  vehicle2Name={comparisonResult.vehicle_2.name}
+                  criteria={criteria}
+                />
+              )}
 
               {/* Verified Sources Accordion */}
               <ComparisonSources sources={comparisonResult.sources} />

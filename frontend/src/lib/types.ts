@@ -1,5 +1,19 @@
 export type ProcessingStatus = "pending" | "processing" | "completed" | "failed";
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  email_confirmed: boolean;
+}
+
+export interface ChatSessionItem {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DocumentItem {
   id: string;
   file_name: string;
@@ -11,6 +25,9 @@ export interface DocumentItem {
   total_pages?: number | null;
   chunks_count: number;
   vehicle_id?: string | null;
+  uploaded_by?: string | null;
+  uploader_name?: string | null;
+  is_owner?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }
